@@ -23,6 +23,11 @@ def validate_cometd_request(required_fields: Set[str] = None):
     def decorator(handler):
         @wraps(handler)
         async def wrapper(request: web.Request) -> web.Response:
+            # Skip validation if the no_validation flag is set on the app
+            if request.app.get("no_validation"):
+                return await handler(request, [{}])
+
+            # Parse the request body
             try:
                 payload: List[Dict[str, Any]] = await request.json()
             except Exception:

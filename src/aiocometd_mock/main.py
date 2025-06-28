@@ -2,17 +2,16 @@ import argparse
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
-from validators import validate_cometd_request
+from .validators import validate_cometd_request
 from aiohttp import web
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 @validate_cometd_request({"version", "supportedConnectionTypes"})
-async def handshake(request: web.Request) -> web.Response:
+async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD handshake requests."""
-    payload: List[Dict[str, Any]] = await request.json()
-    logger.info("Handshake request: %s", payload)
+    logger.debug("Handshake request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
@@ -25,15 +24,14 @@ async def handshake(request: web.Request) -> web.Response:
             "advice": {"reconnect": "retry", "interval": 0, "timeout": 45000},
         }
     ]
-    logger.info("Handshake response: %s", response_data)
+    logger.debug("Handshake response: %s", response_data)
     return web.json_response(response_data)
 
 
 @validate_cometd_request({"clientId", "connectionType"})
-async def connect(request: web.Request) -> web.Response:
+async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD connect requests."""
-    payload: List[Dict[str, Any]] = await request.json()
-    logger.info("Connect request: %s", payload)
+    logger.debug("Connect request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
@@ -44,15 +42,14 @@ async def connect(request: web.Request) -> web.Response:
             "advice": {"reconnect": "retry"},
         }
     ]
-    logger.info("Connect response: %s", response_data)
+    logger.debug("Connect response: %s", response_data)
     return web.json_response(response_data)
 
 
 @validate_cometd_request({"clientId", "subscription"})
-async def subscribe(request: web.Request) -> web.Response:
+async def subscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD subscribe requests."""
-    payload: List[Dict[str, Any]] = await request.json()
-    logger.info("Subscribe request: %s", payload)
+    logger.debug("Subscribe request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
@@ -63,15 +60,14 @@ async def subscribe(request: web.Request) -> web.Response:
             "successful": True,
         }
     ]
-    logger.info("Subscribe response: %s", response_data)
+    logger.debug("Subscribe response: %s", response_data)
     return web.json_response(response_data)
 
 
 @validate_cometd_request({"clientId", "subscription"})
-async def unsubscribe(request: web.Request) -> web.Response:
+async def unsubscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD unsubscribe requests."""
-    payload: List[Dict[str, Any]] = await request.json()
-    logger.info("Unsubscribe request: %s", payload)
+    logger.debug("Unsubscribe request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
@@ -82,15 +78,14 @@ async def unsubscribe(request: web.Request) -> web.Response:
             "successful": True,
         }
     ]
-    logger.info("Unsubscribe response: %s", response_data)
+    logger.debug("Unsubscribe response: %s", response_data)
     return web.json_response(response_data)
 
 
 @validate_cometd_request({"clientId"})
-async def disconnect(request: web.Request) -> web.Response:
+async def disconnect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD disconnect requests."""
-    payload: List[Dict[str, Any]] = await request.json()
-    logger.info("Disconnect request: %s", payload)
+    logger.debug("Disconnect request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
@@ -100,7 +95,7 @@ async def disconnect(request: web.Request) -> web.Response:
             "successful": True,
         }
     ]
-    logger.info("Disconnect response: %s", response_data)
+    logger.debug("Disconnect response: %s", response_data)
     return web.json_response(response_data)
 
 
@@ -140,6 +135,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Disable CometD request validation",
     )
+    parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
     return parser.parse_args(args)
 
 
@@ -149,9 +145,16 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
     args: argparse.Namespace = parse_args()
+    logging.debug("Parsed arguments: %s", args)
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
     app: web.Application = create_app()
     app["no_validation"] = args.no_validation
+
     try:
         asyncio.run(start_server(app, args.host, args.port))
     except KeyboardInterrupt:

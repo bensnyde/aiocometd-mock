@@ -21,6 +21,7 @@ You can customize the server's behavior using the following command-line argumen
   * `--host`: The host to bind to (default: `localhost`).
   * `--port`: The port to bind to (default: `8080`).
   * `--no-validation`: A flag to disable CometD request validation. When this flag is present, the server will not check for required fields in incoming messages.
+  * `--debug`: Enable debug logging.
 
 ### Examples
 
