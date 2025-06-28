@@ -1,0 +1,37 @@
+# aiocometd-mock
+
+A mock CometD server using `aiohttp` and `asyncio`.
+
+This server implements the basic CometD meta channels (`/meta/handshake`, `/meta/connect`, etc.) and includes request validation to ensure that clients send well-formed messages according to the Bayeux protocol.
+
+## Usage
+
+To start the server, run the following command:
+
+```bash
+python main.py
+```
+
+By default, the server will run on `localhost:8080`.
+
+### Command-line arguments
+
+You can customize the server's behavior using the following command-line arguments:
+
+  * `--host`: The host to bind to (default: `localhost`).
+  * `--port`: The port to bind to (default: `8080`).
+  * `--no-validation`: A flag to disable CometD request validation. When this flag is present, the server will not check for required fields in incoming messages.
+
+### Examples
+
+**Run the server on a different host and port:**
+
+```bash
+python main.py --host 0.0.0.0 --port 8888
+```
+
+**Run the server with request validation disabled:**
+
+```bash
+python main.py --no-validation
+```

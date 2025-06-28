@@ -1,0 +1,162 @@
+import argparse
+import asyncio
+import logging
+from typing import Any, Dict, List, Optional
+from validators import validate_cometd_request
+from aiohttp import web
+
+logger: logging.Logger = logging.getLogger(__name__)
+
+
+@validate_cometd_request({"version", "supportedConnectionTypes"})
+async def handshake(request: web.Request) -> web.Response:
+    """Handles CometD handshake requests."""
+    payload: List[Dict[str, Any]] = await request.json()
+    logger.info("Handshake request: %s", payload)
+    request_message: Dict[str, Any] = payload[0]
+    response_data: List[Dict[str, Any]] = [
+        {
+            "id": request_message.get("id", "1"),
+            "channel": "/meta/handshake",
+            "successful": True,
+            "version": "1.0",
+            "supportedConnectionTypes": ["long-polling"],
+            "clientId": "mock-client-id",
+            "advice": {"reconnect": "retry", "interval": 0, "timeout": 45000},
+        }
+    ]
+    logger.info("Handshake response: %s", response_data)
+    return web.json_response(response_data)
+
+
+@validate_cometd_request({"clientId", "connectionType"})
+async def connect(request: web.Request) -> web.Response:
+    """Handles CometD connect requests."""
+    payload: List[Dict[str, Any]] = await request.json()
+    logger.info("Connect request: %s", payload)
+    request_message: Dict[str, Any] = payload[0]
+    response_data: List[Dict[str, Any]] = [
+        {
+            "id": request_message.get("id", "1"),
+            "channel": "/meta/connect",
+            "clientId": request_message.get("clientId", "mock-client-id"),
+            "successful": True,
+            "advice": {"reconnect": "retry"},
+        }
+    ]
+    logger.info("Connect response: %s", response_data)
+    return web.json_response(response_data)
+
+
+@validate_cometd_request({"clientId", "subscription"})
+async def subscribe(request: web.Request) -> web.Response:
+    """Handles CometD subscribe requests."""
+    payload: List[Dict[str, Any]] = await request.json()
+    logger.info("Subscribe request: %s", payload)
+    request_message: Dict[str, Any] = payload[0]
+    response_data: List[Dict[str, Any]] = [
+        {
+            "id": request_message.get("id", "1"),
+            "channel": "/meta/subscribe",
+            "clientId": request_message.get("clientId", "mock-client-id"),
+            "subscription": request_message.get("subscription", "mock-subscription"),
+            "successful": True,
+        }
+    ]
+    logger.info("Subscribe response: %s", response_data)
+    return web.json_response(response_data)
+
+
+@validate_cometd_request({"clientId", "subscription"})
+async def unsubscribe(request: web.Request) -> web.Response:
+    """Handles CometD unsubscribe requests."""
+    payload: List[Dict[str, Any]] = await request.json()
+    logger.info("Unsubscribe request: %s", payload)
+    request_message: Dict[str, Any] = payload[0]
+    response_data: List[Dict[str, Any]] = [
+        {
+            "id": request_message.get("id", "1"),
+            "channel": "/meta/unsubscribe",
+            "clientId": request_message.get("clientId", "mock-client-id"),
+            "subscription": request_message.get("subscription", "mock-subscription"),
+            "successful": True,
+        }
+    ]
+    logger.info("Unsubscribe response: %s", response_data)
+    return web.json_response(response_data)
+
+
+@validate_cometd_request({"clientId"})
+async def disconnect(request: web.Request) -> web.Response:
+    """Handles CometD disconnect requests."""
+    payload: List[Dict[str, Any]] = await request.json()
+    logger.info("Disconnect request: %s", payload)
+    request_message: Dict[str, Any] = payload[0]
+    response_data: List[Dict[str, Any]] = [
+        {
+            "id": request_message.get("id", "1"),
+            "channel": "/meta/disconnect",
+            "clientId": request_message.get("clientId", "mock-client-id"),
+            "successful": True,
+        }
+    ]
+    logger.info("Disconnect response: %s", response_data)
+    return web.json_response(response_data)
+
+
+def create_app() -> web.Application:
+    """Creates and configures the aiohttp application."""
+    logger.info("Creating application")
+    app: web.Application = web.Application()
+    app.router.add_post("/cometd/handshake", handshake)
+    app.router.add_post("/cometd/connect", connect)
+    app.router.add_post("/cometd/subscribe", subscribe)
+    app.router.add_post("/cometd/unsubscribe", unsubscribe)
+    app.router.add_post("/cometd/disconnect", disconnect)
+    return app
+
+
+async def start_server(app: web.Application, host: str, port: int) -> None:
+    """Sets up and starts the web server."""
+    runner: web.AppRunner = web.AppRunner(app)
+    await runner.setup()
+    site: web.TCPSite = web.TCPSite(runner, host, port)
+    await site.start()
+
+    logger.info("======== Running on http://%s:%s ========", host, port)
+    # Wait forever
+    await asyncio.Event().wait()
+
+
+def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parses command-line arguments."""
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description="aiocometd-mock server"
+    )
+    parser.add_argument("--host", default="localhost", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
+    parser.add_argument(
+        "--no-validation",
+        action="store_true",
+        help="Disable CometD request validation",
+    )
+    return parser.parse_args(args)
+
+
+def main() -> None:
+    """Main entry point for the application."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    args: argparse.Namespace = parse_args()
+    app: web.Application = create_app()
+    app["no_validation"] = args.no_validation
+    try:
+        asyncio.run(start_server(app, args.host, args.port))
+    except KeyboardInterrupt:
+        logger.info("Server shutting down.")
+
+
+if __name__ == "__main__":
+    main()
