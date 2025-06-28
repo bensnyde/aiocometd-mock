@@ -25,7 +25,11 @@ def validate_cometd_request(required_fields: Set[str] = None):
         async def wrapper(request: web.Request) -> web.Response:
             # Skip validation if the no_validation flag is set on the app
             if request.app.get("no_validation"):
-                return await handler(request, [{}])
+                try:
+                    payload = await request.json()
+                except Exception:
+                    payload = []
+                return await handler(request, payload)
 
             # Parse the request body
             try:
@@ -87,4 +91,84 @@ def validate_cometd_request(required_fields: Set[str] = None):
         return wrapper
 
     return decorator
+
+
+def validate_client_id(handler):
+    """
+    Decorator to validate the clientId in a CometD request.
+
+    It checks if the clientId from the request payload is present in the
+    `client_ids` dictionary of the web application.
+
+    If the clientId is invalid, it returns a CometD error response
+    with advice to perform a handshake.
+    """
+
+    @wraps(handler)
+    async def wrapper(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
+        if request.app.get("no_validation"):
+            return await handler(request, payload)
+        request_message = payload[0]
+        client_id = request_message.get("clientId")
+        channel = request_message.get("channel")
+        client_ids = request.app.get("client_ids", {})
+
+        # Pre-emptively check for expiration and remove if necessary
+        if client_id in client_ids:
+            client_info = client_ids[client_id]
+            expire_after = request.app.get("expire_client_ids_after")
+            if (
+                expire_after is not None
+                and client_info["connection_count"] >= expire_after
+            ):
+                del client_ids[client_id]
+                logger.debug("Expired clientId: %s", client_id)
+
+        # Single check for validity (covers unknown and just-expired)
+        if client_id not in client_ids:
+            logger.debug("Unknown or expired clientId in request: %s", client_id)
+            return web.json_response(
+                [
+                    {
+                        "id": request_message.get("id"),
+                        "channel": channel,
+                        "successful": False,
+                        "error": f"401::{client_id}::unknown_client_id",
+                        "advice": {"reconnect": "handshake"},
+                    }
+                ]
+            )
+
+        # If we're here, the client is valid.
+        client_info = client_ids[client_id]
+        client_info["connection_count"] += 1
+        logger.debug(
+            f"Connection count for client {client_id} is now: {client_info['connection_count']}"
+        )
+
+        reconnection_interval = request.app.get("reconnection_interval")
+        if (
+            reconnection_interval is not None
+            and client_info["connection_count"] > reconnection_interval
+        ):
+            client_info["connection_count"] = 0
+            logger.debug(
+                "Reconnection interval exceeded for client %s, advising reconnect.",
+                client_id,
+            )
+            return web.json_response(
+                [
+                    {
+                        "id": request_message.get("id", "1"),
+                        "channel": channel,
+                        "clientId": client_id,
+                        "successful": True,
+                        "advice": {"reconnect": "retry"},
+                    }
+                ]
+            )
+
+        return await handler(request, payload)
+
+    return wrapper
 
