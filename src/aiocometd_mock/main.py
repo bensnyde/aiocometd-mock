@@ -2,13 +2,33 @@ import argparse
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
-from .validators import validate_cometd_request
+from validators import validate_cometd_request
 from aiohttp import web
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-@validate_cometd_request({"version", "supportedConnectionTypes"})
+async def process_request(request: web.Request) -> web.Response:
+    """Processes an incoming CometD request."""
+    request_data: List[Dict[str, Any]] = await request.json()
+    channel = request_data[0].get("channel")
+    logger.debug("Processing request for channel: %s", channel)
+
+    if channel == "/meta/handshake":
+        return await handshake(request)
+    elif channel == "/meta/connect":
+        return await connect(request)
+    elif channel == "/meta/subscribe":
+        return await subscribe(request)
+    elif channel == "/meta/unsubscribe":
+        return await unsubscribe(request)
+    elif channel == "/meta/disconnect":
+        return await disconnect(request)
+    else:
+        logger.error("Unknown channel: %s", channel)
+
+
+@validate_cometd_request({"id", "channel"})
 async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD handshake requests."""
     logger.debug("Handshake request: %s", payload)
@@ -28,7 +48,7 @@ async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     return web.json_response(response_data)
 
 
-@validate_cometd_request({"clientId", "connectionType"})
+@validate_cometd_request({"clientId", "id"})
 async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD connect requests."""
     logger.debug("Connect request: %s", payload)
@@ -39,7 +59,10 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
             "channel": "/meta/connect",
             "clientId": request_message.get("clientId", "mock-client-id"),
             "successful": True,
-            "advice": {"reconnect": "retry"},
+            "advice": {
+                "interval": request.app.get("connection-interval"),
+                "timeout": request.app.get("connection-timeout")
+            },
         }
     ]
     logger.debug("Connect response: %s", response_data)
@@ -103,11 +126,7 @@ def create_app() -> web.Application:
     """Creates and configures the aiohttp application."""
     logger.info("Creating application")
     app: web.Application = web.Application()
-    app.router.add_post("/cometd/handshake", handshake)
-    app.router.add_post("/cometd/connect", connect)
-    app.router.add_post("/cometd/subscribe", subscribe)
-    app.router.add_post("/cometd/unsubscribe", unsubscribe)
-    app.router.add_post("/cometd/disconnect", disconnect)
+    app.router.add_post("/cometd", process_request)
     return app
 
 
@@ -130,6 +149,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--host", default="localhost", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
+    parser.add_argument("--connect-interval", type=int, default=60, help="Connect interval")
+    parser.add_argument("--connect-timeout", type=int, default=45000, help="Connect timeout")
     parser.add_argument(
         "--no-validation",
         action="store_true",
@@ -141,19 +162,19 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main() -> None:
     """Main entry point for the application."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+
 
     args: argparse.Namespace = parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
     logging.debug("Parsed arguments: %s", args)
-
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-
     app: web.Application = create_app()
     app["no_validation"] = args.no_validation
+    app["connect_interval"] = args.connect_interval
+    app["connect_timeout"] = args.connect_timeout
 
     try:
         asyncio.run(start_server(app, args.host, args.port))

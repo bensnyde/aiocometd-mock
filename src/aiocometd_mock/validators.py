@@ -67,7 +67,7 @@ def validate_cometd_request(required_fields: Set[str] = None):
                 error_msg = (
                     f"401::{','.join(sorted(list(missing_fields)))}::missing_required_fields"
                 )
-                logger.error("Validation failed: %s", error_msg)
+                logger.error(f"Validation failed: {error_msg} {request_message}")
                 return web.json_response(
                     [
                         {
