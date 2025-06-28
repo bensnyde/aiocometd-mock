@@ -35,7 +35,7 @@ async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
-            "id": request_message.get("id", "1"),
+            "id": request_message.get("id", "0"),
             "channel": "/meta/handshake",
             "successful": True,
             "version": "1.0",
@@ -54,7 +54,7 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
     connection_count = request.app["connection_count"]
     request.app["connection_count"] += 1
     logger.debug(f"Connection count is now: {request.app['connection_count']}")
-                 
+
     logger.debug("Connect request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     reconnect_advice = "retry" if connection_count < request.app["reconnection_interval"] else "none"
@@ -82,7 +82,7 @@ async def subscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
-            "id": request_message.get("id", "1"),
+            "id": request_message.get("id", "2"),
             "channel": "/meta/subscribe",
             "clientId": request_message.get("clientId", "mock-client-id"),
             "subscription": request_message.get("subscription", "mock-subscription"),
@@ -100,7 +100,7 @@ async def unsubscribe(request: web.Request, payload: List[Dict[str, Any]]) -> we
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
-            "id": request_message.get("id", "1"),
+            "id": request_message.get("id", "3"),
             "channel": "/meta/unsubscribe",
             "clientId": request_message.get("clientId", "mock-client-id"),
             "subscription": request_message.get("subscription", "mock-subscription"),
@@ -118,7 +118,7 @@ async def disconnect(request: web.Request, payload: List[Dict[str, Any]]) -> web
     request_message: Dict[str, Any] = payload[0]
     response_data: List[Dict[str, Any]] = [
         {
-            "id": request_message.get("id", "1"),
+            "id": request_message.get("id", "4"),
             "channel": "/meta/disconnect",
             "clientId": request_message.get("clientId", "mock-client-id"),
             "successful": True,
@@ -150,9 +150,7 @@ async def start_server(app: web.Application, host: str, port: int) -> None:
 
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     """Parses command-line arguments."""
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="aiocometd-mock server"
-    )
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(description="aiocometd-mock server")
     parser.add_argument("--host", default="localhost", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
     parser.add_argument("--connect-interval", type=int, default=60, help="Connect interval")
@@ -169,8 +167,6 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main() -> None:
     """Main entry point for the application."""
-
-
     args: argparse.Namespace = parse_args()
 
     logging.basicConfig(
@@ -184,7 +180,6 @@ def main() -> None:
     app["connect_interval"] = args.connect_interval
     app["connect_timeout"] = args.connect_timeout
     app["reconnection_interval"] = args.reconnection_interval
-
 
     try:
         asyncio.run(start_server(app, args.host, args.port))
