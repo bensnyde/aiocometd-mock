@@ -51,8 +51,13 @@ async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.
 @validate_cometd_request({"clientId", "id"})
 async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD connect requests."""
+    connection_count = request.app["connection_count"]
+    request.app["connection_count"] += 1
+    logger.debug(f"Connection count is now: {request.app['connection_count']}")
+                 
     logger.debug("Connect request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
+    reconnect_advice = "retry" if connection_count < request.app["reconnection_interval"] else "none"
     response_data: List[Dict[str, Any]] = [
         {
             "id": request_message.get("id", "1"),
@@ -60,8 +65,9 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
             "clientId": request_message.get("clientId", "mock-client-id"),
             "successful": True,
             "advice": {
-                "interval": request.app.get("connection-interval"),
-                "timeout": request.app.get("connection-timeout")
+                "reconnect": reconnect_advice,
+                "interval": request.app["connect_interval"],
+                "timeout": request.app["connect_timeout"],
             },
         }
     ]
@@ -151,6 +157,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
     parser.add_argument("--connect-interval", type=int, default=60, help="Connect interval")
     parser.add_argument("--connect-timeout", type=int, default=45000, help="Connect timeout")
+    parser.add_argument("--reconnection-interval", type=int, default=5, help="Reconnection interval")
     parser.add_argument(
         "--no-validation",
         action="store_true",
@@ -172,9 +179,12 @@ def main() -> None:
     )
     logging.debug("Parsed arguments: %s", args)
     app: web.Application = create_app()
+    app["connection_count"] = 0
     app["no_validation"] = args.no_validation
     app["connect_interval"] = args.connect_interval
     app["connect_timeout"] = args.connect_timeout
+    app["reconnection_interval"] = args.reconnection_interval
+
 
     try:
         asyncio.run(start_server(app, args.host, args.port))
