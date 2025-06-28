@@ -57,18 +57,23 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
 
     logger.debug("Connect request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
-    reconnect_advice = "retry" if connection_count < request.app["reconnection_interval"] else "none"
+    
+    if connection_count > request.app["reconnection_interval"]:
+        request.app["connection_count"] = 0
+        advice: Dict[str, Any] = {"reconnect": "retry"}
+    else:
+        advice = {
+            "interval": request.app["connect_interval"],
+            "timeout": request.app["connect_timeout"]
+        }
+
     response_data: List[Dict[str, Any]] = [
         {
             "id": request_message.get("id", "1"),
             "channel": "/meta/connect",
             "clientId": request_message.get("clientId", "mock-client-id"),
             "successful": True,
-            "advice": {
-                "reconnect": reconnect_advice,
-                "interval": request.app["connect_interval"],
-                "timeout": request.app["connect_timeout"],
-            },
+            "advice": advice,
         }
     ]
     logger.debug("Connect response: %s", response_data)
