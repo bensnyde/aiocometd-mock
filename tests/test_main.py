@@ -1,6 +1,6 @@
 import pytest
 
-from aiocometd_mock.main import (
+from main import (
     create_app,
     parse_args,
 )

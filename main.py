@@ -3,7 +3,7 @@ import asyncio
 import logging
 import uuid
 from typing import Any, Dict, List, Optional
-from .validators import validate_cometd_request, validate_client_id
+from aiocometd_mock.validators import validate_cometd_request, validate_client_id
 from aiohttp import web
 
 logger: logging.Logger = logging.getLogger(__name__)
