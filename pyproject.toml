@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aiocometd-mock"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A mock CometD server using asyncio."
 authors = [
     { name = "Benton Snyder", email = "benton@bensnyde.me" },
@@ -47,3 +47,20 @@ select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+python_paths = "."
+
+[tool.hatch.version]
+# This tells hatch to get the version from your package's __init__.py file,
+# keeping it in a single source of truth.
+path = "aiocometd_mock/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+# This excludes common development files from the source distribution
+# to keep the final package clean.
+exclude = [
+    ".git",
+    ".github",
+    ".vscode",
+    "/.ruff_cache",
+    "/.pytest_cache",
+]
