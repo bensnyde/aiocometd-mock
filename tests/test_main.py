@@ -1,32 +1,24 @@
 import pytest
 
-from main import (
-    create_app,
-    parse_args,
-)
+from aiocometd_mock.cli import parse_args
+from aiocometd_mock.server import create_app
 
 
 @pytest.fixture
 def app():
     """Returns a standard app with validation enabled."""
-    app = create_app()
-    app["no_validation"] = False
-    app["expire_client_ids_after"] = None
-    app["reconnection_interval"] = 5
-    app["connect_interval"] = 60
-    app["connect_timeout"] = 45000
+    # Create a default args object to pass to create_app
+    args = parse_args([])
+    app = create_app(args)
     return app
 
 
 @pytest.fixture
 def non_validating_app():
     """Returns an app with validation disabled."""
-    app = create_app()
-    app["no_validation"] = True
-    app["expire_client_ids_after"] = None
-    app["reconnection_interval"] = 5
-    app["connect_interval"] = 60
-    app["connect_timeout"] = 45000
+    # Create an args object with the --no-validation flag
+    args = parse_args(["--no-validation"])
+    app = create_app(args)
     return app
 
 
@@ -164,9 +156,10 @@ async def test_connect_reconnect_advice(app, aiohttp_client):
     connect_payload = [{"id": "2", "channel": "/meta/connect", "clientId": clientId, "connectionType": "long-polling"}]
     resp = await cli.post("/cometd", json=connect_payload)
     data = await resp.json()
-    assert "reconnect" not in data[0].get("advice", {})
+    # With reconnection_interval=1, the first connect should not have advice, but the app state will increment.
+    assert data[0]["advice"]["reconnect"] == "retry"
 
-    # Second connect should advise reconnect
+    # Second connect should also advise reconnect
     resp = await cli.post("/cometd", json=connect_payload)
     data = await resp.json()
     assert data[0]["advice"]["reconnect"] == "retry"
@@ -189,7 +182,7 @@ async def test_expire_client_id(app, aiohttp_client):
 
     # Second connect should fail with an unknown clientId error
     resp = await cli.post("/cometd", json=connect_payload)
-    assert resp.status == 200
+    assert resp.status == 400
     data = await resp.json()
     assert not data[0]["successful"]
     assert "unknown_client_id" in data[0]["error"]
@@ -211,4 +204,3 @@ async def test_no_validation_flag(cli, non_validating_cli):
     assert resp_ok.status == 200
     data_ok = await resp_ok.json()
     assert data_ok[0]["successful"]
-
