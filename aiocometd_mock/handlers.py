@@ -48,7 +48,7 @@ async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     logger.debug("Handshake request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     client_id = str(uuid.uuid4())
-    request.app["client_ids"][client_id] = {"connection_count": 0}
+    request.app["client_ids"][client_id] = {"connection_count": 1}
     response_data: List[Dict[str, Any]] = [
         {
             "id": request_message.get("id", "0"),

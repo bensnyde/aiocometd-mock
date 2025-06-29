@@ -151,7 +151,7 @@ def validate_client_id(handler):
             reconnection_interval is not None
             and client_info["connection_count"] > reconnection_interval
         ):
-            client_info["connection_count"] = 0
+            client_info["connection_count"] = 1
             logger.debug(
                 "Reconnection interval exceeded for client %s, advising reconnect.",
                 client_id,
