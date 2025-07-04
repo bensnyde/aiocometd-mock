@@ -4,7 +4,9 @@ from argparse import Namespace
 
 from aiohttp import web
 
-from .handlers import process_request
+from . import adapters
+from . import validators
+from .routes import process_request
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -20,10 +22,18 @@ def create_app(args: Namespace) -> web.Application:
     app["connect_interval"] = args.connect_interval
     app["connect_timeout"] = args.connect_timeout
     app["reconnection_interval"] = args.reconnection_interval
+    app["reconnection_interval_seconds"] = args.reconnection_interval_seconds
     app["expire_client_ids_after"] = args.expire_client_ids_after
+    app["expire_client_ids_after_seconds"] = args.expire_client_ids_after_seconds
 
     # The app uses the handler imported from the library
     app.router.add_post("/cometd", process_request)
+
+    # Load adapters
+    adapters.load_adapters(args.adapters)
+
+    # Load validators
+    validators.load_validators(args.validators)
     return app
 
 

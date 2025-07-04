@@ -13,15 +13,41 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         "--reconnection-interval", type=int, default=5, help="Advise reconnect after a certain number of connections"
     )
     parser.add_argument(
+        "--reconnection-interval-seconds",
+        type=int,
+        default=None,
+        help="Advise reconnect after a certain number of seconds",
+    )
+    parser.add_argument(
         "--expire-client-ids-after",
         type=int,
         default=None,
         help="Expire clientIds after a certain number of connections",
     )
     parser.add_argument(
+        "--expire-client-ids-after-seconds",
+        type=int,
+        default=None,
+        help="Expire clientIds after a certain number of seconds",
+    )
+    parser.add_argument(
         "--no-validation",
+        default=False,
         action="store_true",
         help="Disable CometD request validation",
     )
     parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
-    return parser.parse_args(args)
+    parsed_args = parser.parse_args(args)
+
+    # Automatically determine which adapters to load
+    adapters_to_load = []
+    if parsed_args.reconnection_interval is not None or parsed_args.reconnection_interval_seconds is not None:
+        adapters_to_load.append("reconnect")
+    if parsed_args.expire_client_ids_after is not None or parsed_args.expire_client_ids_after_seconds is not None:
+        adapters_to_load.append("expire")
+    parsed_args.adapters = adapters_to_load
+
+    # Default validators to load
+    parsed_args.validators = ["request", "client_id"] if not parsed_args.no_validation else []
+
+    return parsed_args

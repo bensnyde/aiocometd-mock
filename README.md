@@ -23,7 +23,9 @@ You can customize the server's behavior using the following command-line argumen
   * `--connect-interval`: The connect interval in seconds (default: `60`).
   * `--connect-timeout`: The connect timeout in milliseconds (default: `45000`).
   * `--reconnection-interval`: The reconnection interval in seconds (default: `5`).
+  * `--reconnection-interval-seconds`: The reconnection interval in seconds (default: `None`).
   * `--expire-client-ids-after`: The number of connections after which to expire clientIds (default: `None`).
+  * `--expire-client-ids-after-seconds`: The number of seconds after which to expire clientIds (default: `None`).
   * `--no-validation`: A flag to disable CometD request validation. When this flag is present, the server will not check for required fields in incoming messages.
   * `--debug`: Enable debug logging.
 

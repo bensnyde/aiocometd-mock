@@ -1,10 +1,12 @@
 import logging
+import time
 import uuid
 from typing import Any, Dict, List
 
 from aiohttp import web
 
-from .validators import validate_client_id, validate_cometd_request
+from . import validators
+from . import adapters
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -14,20 +16,36 @@ async def process_request(request: web.Request) -> web.Response:
     Processes an incoming CometD request and routes it to the correct handler.
     """
     try:
-        request_data: List[Dict[str, Any]] = await request.json()
-        channel = request_data[0].get("channel")
+        payload: List[Dict[str, Any]] = await request.json()
+    except Exception:
+        payload = []
+
+    # Run validators
+    response = await validators.run_validators(request, payload)
+    if response:
+        return response
+
+    channel = payload[0].get("channel")
+
+    # Run adapters
+    if channel != "/meta/handshake":
+        response = await adapters.run_adapters(request, payload)
+        if response:
+            return response
+
+    try:
         logger.debug("Processing request for channel: %s", channel)
 
         if channel == "/meta/handshake":
-            return await handshake(request)
+            return await handshake(request, payload)
         elif channel == "/meta/connect":
-            return await connect(request)
+            return await connect(request, payload)
         elif channel == "/meta/subscribe":
-            return await subscribe(request)
+            return await subscribe(request, payload)
         elif channel == "/meta/unsubscribe":
-            return await unsubscribe(request)
+            return await unsubscribe(request, payload)
         elif channel == "/meta/disconnect":
-            return await disconnect(request)
+            return await disconnect(request, payload)
         else:
             logger.error("Unknown channel: %s", channel)
             return web.json_response(
@@ -42,13 +60,15 @@ async def process_request(request: web.Request) -> web.Response:
         )
 
 
-@validate_cometd_request({"id", "channel"})
 async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD handshake requests."""
     logger.debug("Handshake request: %s", payload)
     request_message: Dict[str, Any] = payload[0]
     client_id = str(uuid.uuid4())
-    request.app["client_ids"][client_id] = {"connection_count": 1}
+    request.app["client_ids"][client_id] = {
+        "connection_count": 1,
+        "creation_time": time.time(),
+    }
     response_data: List[Dict[str, Any]] = [
         {
             "id": request_message.get("id", "0"),
@@ -64,8 +84,6 @@ async def handshake(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     return web.json_response(response_data)
 
 
-@validate_cometd_request({"clientId", "id"})
-@validate_client_id
 async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD connect requests."""
     request_message: Dict[str, Any] = payload[0]
@@ -73,9 +91,15 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
 
     logger.debug("Connect request: %s", payload)
 
-    advice = {"interval": request.app["connect_interval"], "timeout": request.app["connect_timeout"]}
+    response = await adapters.run_adapters(request, payload)
+    if response:
+        return response
 
-    response_data: List[Dict[str, Any]] = [
+    advice = {"interval": request.app["connect_interval"], "timeout": request.app["connect_timeout"]}
+    if "advice" in payload[0] and "reconnect" in payload[0]["advice"]:
+        advice["reconnect"] = payload[0]["advice"]["reconnect"]
+
+    response_data = [
         {
             "id": request_message.get("id", "1"),
             "channel": "/meta/connect",
@@ -88,8 +112,6 @@ async def connect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Re
     return web.json_response(response_data)
 
 
-@validate_cometd_request({"clientId", "subscription"})
-@validate_client_id
 async def subscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD subscribe requests."""
     logger.debug("Subscribe request: %s", payload)
@@ -109,8 +131,6 @@ async def subscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.
     return web.json_response(response_data)
 
 
-@validate_cometd_request({"clientId", "subscription"})
-@validate_client_id
 async def unsubscribe(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD unsubscribe requests."""
     logger.debug("Unsubscribe request: %s", payload)
@@ -130,8 +150,6 @@ async def unsubscribe(request: web.Request, payload: List[Dict[str, Any]]) -> we
     return web.json_response(response_data)
 
 
-@validate_cometd_request({"clientId"})
-@validate_client_id
 async def disconnect(request: web.Request, payload: List[Dict[str, Any]]) -> web.Response:
     """Handles CometD disconnect requests."""
     logger.debug("Disconnect request: %s", payload)
